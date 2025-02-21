@@ -1,0 +1,30 @@
+{
+  "os":  "Windows-10-10.0.22631-SP0",
+  "python":  "CPython 3.11.4",
+  "startedAt":  "2025-02-21T06:29:03.880293Z",
+  "program":  "c:\\Users\\Trang Do\\Documents\\GitHub\\Machine-Learning\\sentiment_analysis.py",
+  "codePath":  "sentiment_analysis.py",
+  "git":  {
+    "remote":  "https://github.com/Ankan2810/Machine-Learning.git",
+    "commit":  "202ae7c70388a1a67d0c1ce773d17b2500eb6fd3"
+  },
+  "root":  "C:\\Users\\Trang Do\\Documents\\GitHub\\Machine-Learning",
+  "host":  "DESKTOP-7NG6CQO",
+  "executable":  "C:\\Users\\Trang Do\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+  "codePathLocal":  "sentiment_analysis.py",
+  "cpu_count":  4,
+  "cpu_count_logical":  8,
+  "disk":  {
+    "/":  {
+      "total":  "253785796608",
+      "used":  "236783435776"
+    }
+  },
+  "memory":  {
+    "total":  "8502890496"
+  },
+  "cpu":  {
+    "count":  4,
+    "countLogical":  8
+  }
+}

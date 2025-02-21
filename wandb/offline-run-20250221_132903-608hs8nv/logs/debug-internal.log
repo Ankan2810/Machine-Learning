@@ -1,0 +1,7 @@
+{"time":"2025-02-21T13:29:04.0050144+07:00","level":"INFO","msg":"stream: starting","core version":"0.19.7","symlink path":"C:\\Users\\Trang Do\\Documents\\GitHub\\Machine-Learning\\wandb\\offline-run-20250221_132903-608hs8nv\\logs\\debug-core.log"}
+{"time":"2025-02-21T13:29:04.6309971+07:00","level":"INFO","msg":"created new stream","id":"608hs8nv"}
+{"time":"2025-02-21T13:29:04.632684+07:00","level":"INFO","msg":"stream: started","id":"608hs8nv"}
+{"time":"2025-02-21T13:29:04.632684+07:00","level":"INFO","msg":"writer: Do: started","stream_id":"608hs8nv"}
+{"time":"2025-02-21T13:29:04.632684+07:00","level":"INFO","msg":"sender: started","stream_id":"608hs8nv"}
+{"time":"2025-02-21T13:29:04.632684+07:00","level":"INFO","msg":"handler: started","stream_id":"608hs8nv"}
+{"time":"2025-02-21T13:29:04.6456428+07:00","level":"INFO","msg":"Starting system monitor"}
