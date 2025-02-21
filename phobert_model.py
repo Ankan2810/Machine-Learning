@@ -13,7 +13,7 @@ class PhoBERTModel:
             logits = self.model(**inputs).logits
         probabilities = torch.nn.functional.softmax(logits, dim=-1).squeeze().tolist()
 
-        sentiment_labels = ["negative", "neutral", "positive"]
+        sentiment_labels = ["negative", "positive"]
         sentiment_scores = dict(zip(sentiment_labels, probabilities))
 
         predicted_class = max(sentiment_scores, key=sentiment_scores.get)
