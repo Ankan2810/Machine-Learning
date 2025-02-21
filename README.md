@@ -48,6 +48,11 @@ This project demonstrates how to perform sentiment analysis on Vietnamese text u
     python src/sentiment_analysis.py --predict "Your text here"
     ```
 
+4. Train on Google Colab:
+    ```sh
+    import ML.ipynb file into colab
+    ```
+
 ### Files
 
 - `src/sentiment_analysis.py`: Main script for preprocessing, training, and predicting.
