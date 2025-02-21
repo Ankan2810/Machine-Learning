@@ -50,7 +50,10 @@ This project demonstrates how to perform sentiment analysis on Vietnamese text u
 
 4. Train on Google Colab:
     ```sh
+    upload folder Machine-Learning to Google Drive
     import ML.ipynb file into colab
+    Train
+    Pray that it works
     ```
 
 ### Files
