@@ -10,7 +10,7 @@ os.environ["WANDB_DISABLED"] = "true"
 def fine_tune_phobert():
     model_path = "vinai/phobert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = RobertaForSequenceClassification.from_pretrained(model_path, num_labels=3)
+    model = RobertaForSequenceClassification.from_pretrained(model_path, num_labels=2)
 
     # Load dataset
     dataset = load_dataset("csv", data_files={"train": "./data/train.csv", "test": "./data/test.csv"})
