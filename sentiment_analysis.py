@@ -1,116 +1,128 @@
 import os
-import numpy as np
 import pandas as pd
 import torch
 from transformers import AutoTokenizer, RobertaForSequenceClassification, Trainer, TrainingArguments
-from datasets import load_dataset
+from datasets import Dataset, DatasetDict
 from phobert_model import PhoBERTModel
 from preprocessing import clean_text
+import logging
 
+# Enable CUDA debugging
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ['TORCH_USE_CUDA_DSA'] = "1"
 
-def preprocess_dataset(file_path):
-    """Load dataset, xử lý NaN, kiểm tra giá trị label và fix lỗi"""
-    df = pd.read_csv(file_path)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
-    # 🔍 Xóa NaN
-    df.dropna(inplace=True)
-
-    # 🔍 Chuyển label về kiểu số nguyên
+def preprocess_dataframe(df):
+    """Preprocess DataFrame in-memory"""
+    df = df.dropna().copy()
     df["label"] = df["label"].astype(int)
+    valid_labels = [0, 1, 2]
+    invalid_labels = set(df["label"]) - set(valid_labels)
+    if invalid_labels:
+        logger.warning(f"Found invalid labels: {invalid_labels}. Filtering to valid labels {valid_labels}.")
+        df = df[df["label"].isin(valid_labels)]
+    return df
 
-    # 🔍 Kiểm tra giá trị bất thường
-    unique_labels = df["label"].unique()
-    if not np.all(np.isin(unique_labels, [0, 1, 2])):  # Đảm bảo nhãn chỉ có 0,1,2
-        print(f"🚨 Dataset {file_path} có label không hợp lệ: {unique_labels}")
-        df = df[df["label"].between(0, 2)]  # Xóa nhãn không hợp lệ
-        print("✅ Fixed labels.")
+def process_chunk(chunk, tokenizer):
+    """Process a single chunk of data"""
+    chunk = preprocess_dataframe(chunk)
+    dataset = Dataset.from_pandas(chunk)
+    dataset_dict = DatasetDict({"train": dataset})
 
-    # 🔍 Lưu dataset đã xử lý
-    df.to_csv(file_path, index=False)
-    return file_path
-
-def fine_tune_phobert():
-    """Hàm train mô hình PhoBERT"""
-    model_path = "vinai/phobert-base"
-    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)  # Fix lỗi tokenizer
-    model = RobertaForSequenceClassification.from_pretrained(
-        model_path, num_labels=3, ignore_mismatched_sizes=True  # 🔥 Đặt num_labels=3 để phù hợp với dataset
-    )
-
-    # Xử lý dataset trước khi load
-    train_path = preprocess_dataset("./data/train.csv")
-    test_path = preprocess_dataset("./data/test.csv")
-
-    # Load dataset
-    dataset = load_dataset("csv", data_files={"train": train_path, "test": test_path})
-
-    # 🔍 Kiểm tra NaN và labels trong dataset
-    labels = np.array(dataset["train"]["label"])
-    print("✅ NaN in dataset:", np.isnan(labels).any())
-    print("✅ Unique labels:", np.unique(labels))
-
-    # 🔍 Kiểm tra token có vượt quá vocab không
-    vocab_size = tokenizer.vocab_size
-    print("📌 PhoBERT vocab size:", vocab_size)
-
-    for sample in dataset["train"]:
-        tokens = tokenizer(sample["comment"], padding="max_length", truncation=True, max_length=256)
-        if max(tokens["input_ids"]) >= vocab_size:
-            print(f"🚨 Lỗi: Input {sample['comment']} có token ngoài vocab!")
-
-    # Tokenize dữ liệu
     def preprocess_function(examples):
-        tokens = tokenizer(examples["comment"], padding="max_length", truncation=True, max_length=256)
-        for i, token_list in enumerate(tokens["input_ids"]):
-            if max(token_list) >= tokenizer.vocab_size:
-                print(f"🚨 Lỗi: Input {examples['comment'][i]} có token ngoài vocab!")
-        return tokens
+        return tokenizer(
+            examples["comment"],
+            padding="max_length",
+            truncation=True,
+            max_length=256,
+        )
 
-    tokenized_datasets = dataset.map(preprocess_function, batched=True)
+    tokenized_dataset = dataset_dict.map(
+        preprocess_function,
+        batched=True,
+        desc="Tokenizing chunk",
+        remove_columns=["comment"]
+    )
+    return tokenized_dataset["train"]
 
-    # Cấu hình training
+def fine_tune_phobert(train_path="./data/train.csv", test_path="./data/test.csv", chunk_size=1000):
+    """Fine-tune PhoBERT iteratively over chunks until the entire dataset is processed"""
+    model_path = "vinai/phobert-base"
+    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
+    model = RobertaForSequenceClassification.from_pretrained(model_path, num_labels=3, ignore_mismatched_sizes=True)
+
+    # Freeze the first 3 layers to speed up training
+    for name, param in model.named_parameters():
+        if "roberta.encoder.layer" in name and int(name.split(".")[3]) < 3:
+            param.requires_grad = False
+
+    # Training configuration
+    batch_size = 16 if torch.cuda.is_available() else 4
     training_args = TrainingArguments(
         output_dir="./results",
-        per_device_train_batch_size=2,  # Giảm batch size tránh lỗi GPU
-        per_device_eval_batch_size=2,
-        gradient_accumulation_steps=16,  # Điều chỉnh để không giảm tốc độ học
-        num_train_epochs=3,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        gradient_accumulation_steps=2 if torch.cuda.is_available() else 8,
+        num_train_epochs=1,  # 1 epoch per chunk
         weight_decay=0.01,
+        logging_steps=10,
+        save_strategy="no",
         report_to="none",
-        use_cpu=True  # 🔥 Sửa `use_cpu=True` → `no_cuda=True` để chạy trên CPU nếu cần
+        no_cuda=not torch.cuda.is_available(),
+        fp16=torch.cuda.is_available(),
+        dataloader_num_workers=4,
     )
 
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_datasets["train"],
-        eval_dataset=tokenized_datasets["test"],
     )
 
-    print("🚀 Starting training...")
-    trainer.train()
+    # Train iteratively over chunks
+    logger.info("Starting training over chunks...")
+    chunk_count = 0
+    for chunk in pd.read_csv(train_path, chunksize=chunk_size):
+        chunk_count += 1
+        logger.info(f"Processing chunk {chunk_count}...")
+        tokenized_train = process_chunk(chunk, tokenizer)
+        trainer.train_dataset = tokenized_train
+        trainer.train()
 
+    # Load and process test dataset for evaluation
+    test_df = preprocess_dataframe(pd.read_csv(test_path))
+    tokenized_test = process_chunk(test_df, tokenizer)
+    
+    trainer.eval_dataset = tokenized_test
+    logger.info("Evaluating model on test set...")
+    eval_results = trainer.evaluate()
+    logger.info(f"Evaluation results: {eval_results}")
+
+    # Save the model after completion
     trainer.save_model("./sentiment_phobert")
-    print("✅ Model saved successfully!")
+    logger.info("Model saved successfully!")
+
+def predict_sentiment(model_path="./sentiment_phobert", test_path="./data/test.csv", num_samples=5):
+    """Predict sentiment with the trained model"""
+    analyzer = PhoBERTModel(model_path)
+    df = pd.read_csv(test_path).sample(num_samples, random_state=42)
+
+    for _, row in df.iterrows():
+        text = clean_text(row["comment"])
+        sentiment, confidence, scores = analyzer.predict(text)
+        logger.info(f"Text: {text}")
+        logger.info(f"Predicted Sentiment: {sentiment}, Confidence: {confidence:.2f}")
+        logger.info(f"Scores: {scores}")
 
 def main():
-    """Hàm chạy training và dự đoán"""
-    fine_tune_phobert()
-
-    # Load model đã train xong để dự đoán
-    model_path = "./sentiment_phobert"
-    analyzer = PhoBERTModel(model_path)
-
-    # Load dataset để test
-    df = pd.read_csv("./data/train.csv")
-
-    for index, row in df.iterrows():
-        text = clean_text(row['comment'])
-        sentiment, confidence, scores = analyzer.predict(text)
-
-        print(f"Text: {text}")
-        print(f"Predicted Sentiment: {sentiment}, Confidence: {confidence:.2f}")
-        print(f"Scores: {scores}\n")
+    """Main execution function"""
+    try:
+        fine_tune_phobert()
+        predict_sentiment()
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
