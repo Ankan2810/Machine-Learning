@@ -59,6 +59,10 @@ def fine_tune_phobert(train_path="./data/train.csv", test_path="./data/test.csv"
         if "roberta.encoder.layer" in name and int(name.split(".")[3]) < 3:
             param.requires_grad = False
 
+    # Dynamically set num_workers based on CPU cores
+    num_workers = min(4, os.cpu_count() or 1)  # Cap at 4, default to 1 if cpu_count fails
+    logger.info(f"Using {num_workers} workers for DataLoader based on {os.cpu_count()} CPU cores.")
+
     # Training configuration
     batch_size = 16 if torch.cuda.is_available() else 4
     training_args = TrainingArguments(
@@ -73,7 +77,7 @@ def fine_tune_phobert(train_path="./data/train.csv", test_path="./data/test.csv"
         report_to="none",
         no_cuda=not torch.cuda.is_available(),
         fp16=torch.cuda.is_available(),
-        dataloader_num_workers=4,
+        dataloader_num_workers=num_workers,  # Adjusted dynamically
     )
 
     trainer = Trainer(
@@ -106,7 +110,7 @@ def fine_tune_phobert(train_path="./data/train.csv", test_path="./data/test.csv"
 
 def predict_sentiment(model_path="./sentiment_phobert", test_path="./data/test.csv", num_samples=5):
     """Predict sentiment with the trained model"""
-    analyzer = PhoBERTModel(model_path)
+    analyzer = PhoBERTModel(model_path=model_path)  # Load fine-tuned model
     df = pd.read_csv(test_path).sample(num_samples, random_state=42)
 
     for _, row in df.iterrows():
