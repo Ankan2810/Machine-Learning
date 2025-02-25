@@ -30,7 +30,7 @@ def process_chunk(chunk, tokenizer):
     """Process a single chunk of data"""
     chunk = preprocess_dataframe(chunk)
     dataset = Dataset.from_pandas(chunk)
-    dataset_dict = DatasetDict({"train": dataset})
+    dataset_dict = DatasetDict({"train_": dataset})
 
     def preprocess_function(examples):
         return tokenizer(
@@ -48,7 +48,7 @@ def process_chunk(chunk, tokenizer):
     )
     return tokenized_dataset["train"]
 
-def fine_tune_phobert(train_path="./data/train.csv", test_path="./data/test.csv", chunk_size=1000):
+def fine_tune_phobert(train_path="./data/train_data.csv", test_path="./data/test.csv", chunk_size=1000):
     """Fine-tune PhoBERT iteratively over chunks until the entire dataset is processed"""
     model_path = "vinai/phobert-base"
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
